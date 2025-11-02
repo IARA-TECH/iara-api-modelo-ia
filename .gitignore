@@ -1,2 +1,5 @@
 /venv
 .env
+__pycache__/
+scheduler/__pycache__/
+scheduler/routes/__pycache__/
