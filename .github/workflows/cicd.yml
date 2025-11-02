@@ -1,0 +1,72 @@
+name: CI/CD → Render
+
+on:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verificações de build e dependências
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Cache do pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Verificar imports e sintaxe
+        run: |
+          echo "Validando sintaxe e imports..."
+          python -m compileall . || exit 1
+          echo "Verificação concluída."
+
+      - name: Rodar testes (se existirem)
+        run: |
+          if [ -f pytest.ini ] || [ -d tests ]; then
+            pip install pytest
+            pytest -q --disable-warnings
+          else
+            echo "Nenhum teste encontrado, seguindo o fluxo."
+          fi
+
+  deploy:
+    name: Deploy no Render
+    runs-on: ubuntu-latest
+    needs: verify
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Disparar deploy via Render Deploy Hook
+        env:
+          HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          echo "Disparando deploy via Render Hook..."
+          status=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$HOOK_URL")
+          echo "Status HTTP: $status"
+          if [[ "$status" != "200" && "$status" != "202" && "$status" != "204" ]]; then
+            echo "Falha ao acionar o deploy no Render!"
+            exit 1
+          fi
+          echo "Deploy ocorreu com sucesso!"

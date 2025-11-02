@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -74,23 +74,76 @@ async def root():
     </html>
     """
 
+
+# === Funções auxiliares ===
+
+def dividir_imagem(imagem: PIL.Image.Image):
+    """Divide a imagem em partes dependendo do tamanho"""
+    width, height = imagem.size
+    partes = []
+
+    if width > 3000 and height > 3000:
+        # 4 partes (quadrantes)
+        partes.append(imagem.crop((0, 0, width//2, height//2)))
+        partes.append(imagem.crop((width//2, 0, width, height//2)))
+        partes.append(imagem.crop((0, height//2, width//2, height)))
+        partes.append(imagem.crop((width//2, height//2, width, height)))
+    elif width > 2000:
+        # 2 partes horizontais
+        partes.append(imagem.crop((0, 0, width//2, height)))
+        partes.append(imagem.crop((width//2, 0, width, height)))
+    elif height > 2000:
+        # 2 partes verticais
+        partes.append(imagem.crop((0, 0, width, height//2)))
+        partes.append(imagem.crop((0, height//2, width, height)))
+    else:
+        partes = [imagem]
+
+    return partes
+
+
 def analisar_imagem_pil(imagem: PIL.Image.Image):
-    """Executa a análise da imagem com o prompt fixo"""
+    """Executa a análise da imagem (ou de suas partes) com o prompt fixo"""
     try:
-        response = model.generate_content([PROMPT_FIXO, imagem])
-        return response.text
+        partes = dividir_imagem(imagem)
+        resultados = []
+
+        for i, parte in enumerate(partes, start=1):
+            try:
+                response = model.generate_content([PROMPT_FIXO, parte])
+                if response.text:
+                    resultados.append(response.text)
+            except Exception as e:
+                resultados.append(f"Erro na parte {i}: {str(e)}")
+
+        return "\n".join(resultados)
     except Exception as e:
         return f"Erro: {str(e)}"
 
+
+# === Rotas principais ===
+
 @app.post("/analisar/")
-async def analisar_imagem(file: UploadFile):
+async def analisar_imagem(
+    file: UploadFile = File(...),
+    colors: str = Form(None, description="Lista de cores (ex: #33b2cc,#6eafcc,#afd1ed)"),
+    values: str = Form(None, description="Lista de valores (ex: 1,10,100)")
+):
     """
-    Envie uma imagem (.jpg ou .png). O sistema gera o CSV e também o Excel com os resultados.
+    Envie uma imagem (.jpg ou .png) com os parâmetros opcionais de cor e valor.
     """
-    excel_path = None  # Inicializa a variável
+    excel_path = None
     try:
         conteudo = await file.read()
         imagem = PIL.Image.open(io.BytesIO(conteudo))
+
+        # 🔸 Converte as strings de cores/valores em listas (se vierem)
+        lista_cores = colors.split(",") if colors else []
+        lista_valores = [int(v) for v in values.split(",")] if values else []
+
+        # Apenas para visualização (você pode usar isso dentro da análise depois)
+        print("Cores recebidas:", lista_cores)
+        print("Valores recebidos:", lista_valores)
 
         resultado = analisar_imagem_pil(imagem)
 
@@ -98,11 +151,9 @@ async def analisar_imagem(file: UploadFile):
         try:
             df = pd.read_csv(io.StringIO(resultado))
         except Exception:
-            # tenta com separador ponto e vírgula
             try:
                 df = pd.read_csv(io.StringIO(resultado), sep=";")
             except Exception:
-                # Se ainda falhar, cria um DataFrame com o erro
                 df = pd.DataFrame({"Erro": [f"Não foi possível processar o resultado: {resultado}"]})
 
         # === Salva como Excel temporário ===
@@ -110,23 +161,18 @@ async def analisar_imagem(file: UploadFile):
             excel_path = tmp.name
             df.to_excel(excel_path, index=False, engine='openpyxl')
 
-        # === Retorna JSON com link e preview ===
+        # === Retorna JSON com tudo ===
         return JSONResponse({
             "arquivo": file.filename,
             "resultado_csv": resultado,
             "excel_download": f"/download_excel/?path={excel_path}",
-            "mensagem": "Análise concluída com sucesso! Clique no link para baixar o Excel."
+            "mensagem": "Análise concluída com sucesso!"
         })
 
     except Exception as e:
-        # Limpa o arquivo temporário em caso de erro
         if excel_path and os.path.exists(excel_path):
             os.unlink(excel_path)
-        return JSONResponse(
-            status_code=500,
-            content={"erro": str(e)}
-        )
-
+        return JSONResponse(status_code=500, content={"erro": str(e)})
 @app.get("/download_excel/")
 async def download_excel(path: str):
     """Permite baixar o Excel gerado"""
@@ -148,6 +194,7 @@ async def download_excel(path: str):
             content={"erro": f"Erro ao baixar arquivo: {str(e)}"}
         )
 
+
 # Limpeza de arquivos temporários (opcional)
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -159,6 +206,7 @@ async def shutdown_event():
             os.unlink(file)
         except:
             pass
+
 
 if __name__ == "__main__":
     import uvicorn
