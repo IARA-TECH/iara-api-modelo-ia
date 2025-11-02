@@ -7,6 +7,10 @@ import PIL.Image
 import io
 import pandas as pd
 from tempfile import NamedTemporaryFile
+import asyncio
+from scheduler.routes.health_router import router as health_router
+from scheduler.keep_alive import keep_alive
+from contextlib import asynccontextmanager
 
 # === CONFIGURAÇÃO ===
 load_dotenv()
@@ -43,12 +47,19 @@ IMPORTANTE
 mande somente as informações pedidas (formato csv), para que eu possa passar isso para um arquivo. NAO PRECISA JUSTIFICAR SUA RESPOSTA
 
 """
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    asyncio.create_task(keep_alive())
+    yield
 
 app = FastAPI(
     title="API de Análise de Ábaco com IA (Gemini)",
     description="Envia uma imagem de ábaco e recebe uma contagem estruturada em CSV e Excel usando IA.",
-    version="1.1.0"
+    version="1.1.0",
+    lifespan=lifespan
 )
+
+app.include_router(health_router)
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
