@@ -75,7 +75,7 @@ async def root():
     """
 
 
-# === Funções auxiliares ===
+# === Funções auxiliares para a contagem ==
 
 def dividir_imagem(imagem: PIL.Image.Image):
     """Divide a imagem em partes dependendo do tamanho"""
