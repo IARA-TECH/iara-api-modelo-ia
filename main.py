@@ -25,8 +25,13 @@ model = genai.GenerativeModel("gemini-2.5-flash")
 PROMPT_FIXO = """
 Sua função é contar por linha os valores para condena parcial e condena total de cada problema em uma indústria aviária.
 
-Para cada tipo de condena (parcial e total), exitem 3 colunas para realizar a contagem CENTENA (amarelo), DEZENA (azul) e UNIDADE (vermelho), assim você irá realizar a soma, se mexer x vermelhas e y amarela = x*1 + y*10 
-Cada linha representa uma categoria, informada ao meio da imagem
+São Duas colunas: Parcial (verde) e Total(vermelha) onde cada linha representa um tipo de problema. No ábaco são quatro linhas: Hematomas, Magreza, Lesão de Pele e Falhas Tecnológicas.
+
+## Instruções
+-- analise atentamente a imagem
+-- tenha certeza de sua conta
+-- procure reconhecer quais foram as muçangas movidas
+-- CONTE QUANTAS FORAM ESSAS MIÇangas isoladas e passe isso para o usuario
 
 ### REGRA PARA CONTAGEM
 Quando um ábaco está zerado, todas as miçangas ficam grudadas juntas. Quando há uma distância entre esse grupo de não movidos com outra miçanga, essa miçanga é considerada como movida. Você precisa ser minucioso, se tudo estiver com valores iguais diferentes de zero, desconfie. Se todas as linhas foram zero, também desconfie. Para ser contada, as miçangas precisam ter uma distância consideravel, não pode ser so um tiquinho. Além disso, eu posso ter mais de uma miçanga movida em uma coluna de um ábaco assim: 
