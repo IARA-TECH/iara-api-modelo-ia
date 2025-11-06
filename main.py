@@ -8,8 +8,6 @@ import io
 import pandas as pd
 from tempfile import NamedTemporaryFile
 import asyncio
-from scheduler.routes.health_router import router as health_router
-from scheduler.keep_alive import keep_alive
 from contextlib import asynccontextmanager
 
 # === CONFIGURAÇÃO ===
@@ -59,7 +57,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-app.include_router(health_router)
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
